@@ -1,0 +1,20 @@
+# SEGURANÇA
+.env
+
+# BANCO
+*.db
+
+# PYTHON
+__pycache__/
+*.pyc
+
+# AMBIENTE VIRTUAL
+venv/
+.venv/
+
+# STREAMLIT
+.streamlit/secrets.toml
+
+# SISTEMA
+.DS_Store
+Thumbs.db
