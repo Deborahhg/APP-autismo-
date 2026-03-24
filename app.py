@@ -1,4 +1,6 @@
 import os
+from dotenv import load_dotenv
+from openai import OpenAI
 import re
 import sqlite3
 import hashlib
@@ -8,8 +10,12 @@ from urllib.parse import quote_plus
 
 import pandas as pd
 import streamlit as st
-from dotenv import load_dotenv
-from openai import OpenAI
+import altair as alt
+
+load_dotenv()
+
+API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=API_KEY) if API_KEY else None
 
 # PDF
 try:
@@ -18,8 +24,6 @@ try:
     PDF_DISPONIVEL = True
 except Exception:
     PDF_DISPONIVEL = False
-
-load_dotenv()
 
 # =========================
 # CONFIGURAÇÃO
@@ -37,38 +41,38 @@ st.set_page_config(
 st.markdown("""
 <style>
     .stApp {
-        background-color: #F7F9FC;
+        background: linear-gradient(180deg, #F8FAFC 0%, #F1F5F9 100%);
     }
 
     .block-container {
-        padding-top: 1.2rem !important;
+        padding-top: 1rem !important;
         padding-left: 2rem !important;
         padding-right: 2rem !important;
         padding-bottom: 1.5rem !important;
     }
 
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #D9ECFF 0%, #EAF4FF 100%);
+        background: linear-gradient(180deg, #EDF4FA 0%, #E7EEF6 100%);
         border-right: 1px solid #D9E2EC;
         min-width: 320px !important;
         max-width: 320px !important;
-        padding-top: 10px !important;
+        padding-top: 14px !important;
     }
 
     .sidebar-top-card {
-        background: rgba(255,255,255,0.82);
-        border: 1px solid #D7E6F5;
-        border-radius: 18px;
-        padding: 14px;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid #DCE7F2;
+        border-radius: 22px;
+        padding: 16px;
         margin-bottom: 16px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.04);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
     }
 
     .sidebar-user {
         font-size: 16px;
         font-weight: 700;
-        color: #1F2937;
-        margin-bottom: 6px;
+        color: #0F172A;
+        margin-bottom: 4px;
     }
 
     .sidebar-sub {
@@ -77,42 +81,45 @@ st.markdown("""
         margin-bottom: 0;
     }
 
-    /* CARD BRANCO DO MENU */
-    section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"] {
-        background: #FFFFFF !important;
-        border: 1px solid #D7E6F5 !important;
-        border-radius: 24px !important;
-        padding: 14px !important;
-        box-shadow: 0 8px 22px rgba(0,0,0,0.05) !important;
-        margin-bottom: 16px !important;
+    .menu-card {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 24px;
+        padding: 18px 14px 14px 14px;
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+        margin-top: 12px;
+        margin-bottom: 16px;
     }
 
     .menu-title {
-        font-size: 24px;
-        font-weight: 700;
-        color: #1F2937;
+        font-size: 21px;
+        font-weight: 800;
+        color: #0F172A;
         margin-bottom: 4px;
+        padding-left: 6px;
     }
 
     .menu-subtitle {
         font-size: 13px;
         color: #64748B;
         margin-bottom: 14px;
+        padding-left: 6px;
     }
 
     .menu-divider {
         height: 1px;
-        background: #DCE7F2;
+        background: #E5EAF1;
         margin: 8px 0 14px 0;
     }
 
     .main-header {
-        background: white;
+        background: rgba(255,255,255,0.95);
         padding: 22px;
-        border-radius: 22px;
+        border-radius: 24px;
         border: 1px solid #E5EAF1;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.05);
         margin-bottom: 18px;
+        backdrop-filter: blur(4px);
     }
 
     .card {
@@ -120,7 +127,7 @@ st.markdown("""
         padding: 20px;
         border-radius: 18px;
         border: 1px solid #E5EAF1;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.05);
         margin-bottom: 16px;
         width: 100%;
         box-sizing: border-box;
@@ -128,7 +135,7 @@ st.markdown("""
 
     .highlight-box {
         padding: 16px;
-        border-radius: 16px;
+        border-radius: 18px;
         margin-bottom: 14px;
         border-left: 6px solid;
         box-shadow: 0 4px 14px rgba(0,0,0,0.04);
@@ -157,16 +164,16 @@ st.markdown("""
     .metric-card {
         background: white;
         padding: 16px;
-        border-radius: 16px;
+        border-radius: 18px;
         border: 1px solid #E5EAF1;
         text-align: center;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.05);
         margin-bottom: 10px;
     }
 
     .metric-number {
         font-size: 28px;
-        font-weight: 700;
+        font-weight: 800;
         color: #111827;
         margin-bottom: 4px;
     }
@@ -235,38 +242,41 @@ st.markdown("""
     }
 
     .assistente-alert {
-        background: #EAF4FF;
+        background: #FFF1F2;
         padding: 18px;
-        border-radius: 14px;
+        border-radius: 16px;
         margin-bottom: 20px;
-        color: #2B5A8A;
-        border: 1px solid #D9EAFE;
+        color: #7F1D1D;
+        border: 1px solid #FBCFE8;
     }
 
     .welcome-banner {
-        background: linear-gradient(90deg, #2563EB 0%, #3B82F6 100%);
-        color: white;
-        padding: 18px 22px;
-        border-radius: 18px;
+        background: linear-gradient(135deg, #FFFDF8 0%, #FFFFFF 100%);
+        color: #374151;
+        padding: 20px 22px;
+        border-radius: 20px;
         margin-bottom: 18px;
-        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.18);
-        border: none;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        border: 1px solid #F1E7D6;
+        animation: fadeInDown 0.45s ease;
     }
 
     .welcome-title {
         font-size: 22px;
-        font-weight: 700;
+        font-weight: 800;
         margin-bottom: 4px;
+        color: #1F2937;
     }
 
     .welcome-subtitle {
         font-size: 14px;
-        opacity: 0.95;
+        color: #5B6470;
+        line-height: 1.5;
     }
 
     .section-title {
         font-size: 24px;
-        font-weight: 700;
+        font-weight: 800;
         color: #111827;
         margin-bottom: 6px;
     }
@@ -290,8 +300,8 @@ st.markdown("""
         display: inline-block;
         padding: 6px 12px;
         border-radius: 999px;
-        background: #EFF6FF;
-        color: #1D4ED8;
+        background: #F3F4F6;
+        color: #374151;
         font-size: 12px;
         font-weight: 700;
         margin-bottom: 10px;
@@ -304,44 +314,59 @@ st.markdown("""
         border-radius: 12px !important;
     }
 
-    /* BOTÕES DO MENU */
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
         width: 100%;
-        min-height: 46px;
-        border-radius: 14px !important;
-        border: none !important;
+        min-height: 48px;
+        border-radius: 16px !important;
+        border: 1px solid transparent !important;
         background: transparent !important;
-        color: #1F2937 !important;
+        color: #1E293B !important;
         text-align: left !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
         padding: 12px 14px !important;
         box-shadow: none !important;
+        transition: all 0.2s ease !important;
     }
 
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
-        background: #F3F7FB !important;
+        background: #F8FAFC !important;
+        border: 1px solid #E2E8F0 !important;
+        transform: translateX(2px);
     }
 
-    /* BOTÃO VERMELHO DO ASSISTENTE IA */
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
-        background: #D94B5C !important;
+        background: linear-gradient(135deg, #E5485D 0%, #CD334A 100%) !important;
         color: white !important;
         text-align: left !important;
-        font-weight: 700 !important;
-        border-radius: 14px !important;
+        font-weight: 800 !important;
+        border-radius: 16px !important;
         border: none !important;
+        box-shadow: 0 10px 18px rgba(217, 75, 92, 0.25) !important;
     }
 
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
-        background: #C73E50 !important;
+        background: linear-gradient(135deg, #D63D53 0%, #BF2941 100%) !important;
         color: white !important;
     }
 
     .btn-logout button {
-        background: rgba(255,255,255,0.82) !important;
+        background: rgba(255,255,255,0.95) !important;
         border: 1px solid #D7E6F5 !important;
         color: #1F2937 !important;
         text-align: center !important;
+        border-radius: 16px !important;
+        font-weight: 700 !important;
+    }
+
+    @keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     @media (max-width: 768px) {
@@ -548,10 +573,8 @@ def gerar_links_busca_profissionais(especialidade, cidade, estado):
     )
 
 def analisar_com_ia(episodio, antes, sensibilidades, rotina):
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise ValueError("A chave OPENAI_API_KEY não foi encontrada. Verifique o arquivo .env.")
-    client = OpenAI(api_key=api_key)
+    if client is None:
+        raise ValueError("A chave OPENAI_API_KEY não foi encontrada. Crie um arquivo .env com sua chave da OpenAI.")
 
     prompt = f"""
 Você é um assistente de apoio para TEA.
@@ -648,7 +671,8 @@ def exibir_boas_vindas():
         <div class="welcome-banner">
             <div class="welcome-title">Bem-vinda, {st.session_state.usuario_nome} ✨</div>
             <div class="welcome-subtitle">
-                Que bom ter você de volta ao Calmi. Vamos acompanhar os registros com mais clareza e organização.
+                Que bom ter você aqui. Seu espaço está pronto para registrar comportamentos,
+                acompanhar padrões e cuidar da rotina com mais clareza e acolhimento.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -707,16 +731,104 @@ def exibir_graficos(df):
         return
 
     registros_por_dia = (
-        df.groupby("data_registro").size().reset_index(name="Quantidade").sort_values("data_registro").set_index("data_registro")
+        df.groupby("data_registro")
+        .size()
+        .reset_index(name="Quantidade")
+        .sort_values("data_registro")
     )
+
     st.subheader("Registros por dia")
-    st.line_chart(registros_por_dia)
+
+    base_dia = alt.Chart(registros_por_dia).encode(
+        x=alt.X(
+            "data_registro:T",
+            title="Data",
+            axis=alt.Axis(format="%d/%m", labelAngle=0)
+        ),
+        y=alt.Y(
+            "Quantidade:Q",
+            title="Quantidade de registros"
+        ),
+        tooltip=[
+            alt.Tooltip("data_registro:T", title="Data", format="%d/%m/%Y"),
+            alt.Tooltip("Quantidade:Q", title="Quantidade")
+        ]
+    )
+
+    area_dia = base_dia.mark_area(
+        opacity=0.15
+    )
+
+    linha_dia = base_dia.mark_line(
+        point=False,
+        strokeWidth=3,
+        interpolate="monotone"
+    )
+
+    pontos_dia = base_dia.mark_circle(
+        size=70
+    )
+
+    grafico_dia = (
+        (area_dia + linha_dia + pontos_dia)
+        .properties(height=320)
+        .configure_view(strokeWidth=0)
+        .configure_axis(
+            grid=True,
+            labelColor="#475569",
+            titleColor="#334155"
+        )
+    )
+
+    st.altair_chart(grafico_dia, use_container_width=True)
 
     registros_por_crianca = (
-        df.groupby("crianca").size().reset_index(name="Quantidade").set_index("crianca")
+        df.groupby("crianca")
+        .size()
+        .reset_index(name="Quantidade")
+        .sort_values("Quantidade")
     )
+
     st.subheader("Registros por criança")
-    st.bar_chart(registros_por_crianca)
+
+    base_crianca = alt.Chart(registros_por_crianca).encode(
+        x=alt.X(
+            "crianca:N",
+            title="Criança",
+            sort="-y"
+        ),
+        y=alt.Y(
+            "Quantidade:Q",
+            title="Quantidade de registros"
+        ),
+        tooltip=[
+            alt.Tooltip("crianca:N", title="Criança"),
+            alt.Tooltip("Quantidade:Q", title="Quantidade")
+        ]
+    )
+
+    linha_crianca = base_crianca.mark_line(
+        point=False,
+        strokeWidth=3,
+        interpolate="monotone"
+    )
+
+    pontos_crianca = base_crianca.mark_circle(
+        size=90
+    )
+
+    grafico_crianca = (
+        (linha_crianca + pontos_crianca)
+        .properties(height=320)
+        .configure_view(strokeWidth=0)
+        .configure_axis(
+            grid=True,
+            labelColor="#475569",
+            titleColor="#334155"
+        )
+    )
+
+    st.altair_chart(grafico_crianca, use_container_width=True)
 
 def gerar_pdf_relatorio(nome_usuario, crianca_nome, registros):
     buffer = BytesIO()
@@ -852,7 +964,7 @@ else:
             f"""
             <div class="sidebar-top-card">
                 <div class="sidebar-user">👤 {st.session_state.usuario_nome}</div>
-                <div class="sidebar-sub">Conta conectada</div>
+                <div class="sidebar-sub">Conta conectada com sucesso</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -862,6 +974,7 @@ else:
             opcoes = {crianca[1]: crianca[0] for crianca in criancas_usuario}
             nomes = list(opcoes.keys())
             nome_atual = nomes[0]
+
             for nome, cid in opcoes.items():
                 if cid == st.session_state.crianca_id_ativa:
                     nome_atual = nome
@@ -876,34 +989,36 @@ else:
         else:
             st.info("Cadastre uma criança no perfil para começar.")
 
-        with st.container(border=True):
-            st.markdown('<div class="menu-title">Menu</div>', unsafe_allow_html=True)
-            st.markdown('<div class="menu-subtitle">Navegue pelas áreas do app</div>', unsafe_allow_html=True)
-            st.markdown('<div class="menu-divider"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="menu-card">', unsafe_allow_html=True)
+        st.markdown('<div class="menu-title">Menu principal</div>', unsafe_allow_html=True)
+        st.markdown('<div class="menu-subtitle">Acesse as áreas do app com facilidade</div>', unsafe_allow_html=True)
+        st.markdown('<div class="menu-divider"></div>', unsafe_allow_html=True)
 
-            if st.button("📊   Dashboard", key="menu_dashboard", use_container_width=True):
-                st.session_state.pagina = "Dashboard"
+        if st.button("📊 Dashboard", key="menu_dashboard", use_container_width=True):
+            st.session_state.pagina = "Dashboard"
 
-            if st.button("📝   Registrar comportamento", key="menu_registrar", use_container_width=True):
-                st.session_state.pagina = "Registrar comportamento"
+        if st.button("📝 Registrar comportamento", key="menu_registrar", use_container_width=True):
+            st.session_state.pagina = "Registrar comportamento"
 
-            if st.button("💡   Análise de gatilhos", key="menu_gatilhos", use_container_width=True):
-                st.session_state.pagina = "Análise de gatilhos"
+        if st.button("💡 Análise de gatilhos", key="menu_gatilhos", use_container_width=True):
+            st.session_state.pagina = "Análise de gatilhos"
 
-            if st.button("⚠️   Previsão de crises", key="menu_previsao", use_container_width=True):
-                st.session_state.pagina = "Previsão de crises"
+        if st.button("⚠️ Previsão de crises", key="menu_previsao", use_container_width=True):
+            st.session_state.pagina = "Previsão de crises"
 
-            if st.button("📄   Relatório", key="menu_relatorio", use_container_width=True):
-                st.session_state.pagina = "Relatório"
+        if st.button("📄 Relatório", key="menu_relatorio", use_container_width=True):
+            st.session_state.pagina = "Relatório"
 
-            if st.button("👩‍⚕️   Buscar profissionais", key="menu_profissionais", use_container_width=True):
-                st.session_state.pagina = "Buscar profissionais"
+        if st.button("👩‍⚕️ Buscar profissionais", key="menu_profissionais", use_container_width=True):
+            st.session_state.pagina = "Buscar profissionais"
 
-            if st.button("👤   Perfil", key="menu_perfil", use_container_width=True):
-                st.session_state.pagina = "Perfil"
+        if st.button("👤 Perfil", key="menu_perfil", use_container_width=True):
+            st.session_state.pagina = "Perfil"
 
-            if st.button("🤖 Assistente IA", key="menu_ia", type="primary", use_container_width=True):
-                st.session_state.pagina = "Assistente IA"
+        if st.button("🤖 Assistente IA", key="menu_ia", type="primary", use_container_width=True):
+            st.session_state.pagina = "Assistente IA"
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown('<div class="btn-logout">', unsafe_allow_html=True)
         if st.button("🚪 Sair", key="menu_sair", use_container_width=True):
@@ -1019,7 +1134,7 @@ else:
             for col in ["episodio", "antes", "sensibilidades", "rotina"]:
                 if col in df.columns:
                     for texto in df[col].fillna("").tolist():
-                        palavras.extend(re.findall(r"\\b[a-zA-ZÀ-ÿ]{4,}\\b", texto.lower()))
+                        palavras.extend(re.findall(r"\b[a-zA-ZÀ-ÿ]{4,}\b", texto.lower()))
 
             stop = {
                 "para", "com", "mais", "menos", "sobre", "antes", "depois", "durante",
